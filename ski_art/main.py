@@ -9,18 +9,7 @@ def main(inputs, output):
     for file in inputs:
         points.extend(get_points_from_file(file))
 
-    bounds = get_bounds(points)
-
-    height = bounds["max_lat"] - bounds["min_lat"]
-    width = bounds["max_lon"] - bounds["min_lon"]
-
-    transform_coefficient = 1000.0 / width # Make width 1000
-
-    for point in points:
-        point["x"] = (point["lon"] - bounds["min_lon"]) * transform_coefficient
-        point["y"] = (point["lat"] - bounds["min_lat"]) * transform_coefficient
-
-    coords = map(lambda x: (x["x"], x["y"]), points)
+    coords = points_to_coordinates(points)
     dwg.add(dwg.polyline(coords, stroke="black", stroke_width="3", fill="white"))
     dwg.save()
 
@@ -65,6 +54,22 @@ def get_bounds(points):
         "max_lat": max_lat,
         "max_lon": max_lon
     }
+
+def points_to_coordinates(points, desired_width=1000):
+    """ Transforms GPS points into coordinates for the desired SVG file """
+    bounds = get_bounds(points)
+
+    height = bounds["max_lat"] - bounds["min_lat"]
+    width = bounds["max_lon"] - bounds["min_lon"]
+
+    transform_coefficient = float(desired_width) / width # Make width 1000
+
+    return map(lambda x: point_to_coordinate(x, bounds, transform_coefficient), points)
+
+def point_to_coordinate(point, bounds, transform_coefficient):
+    """ Transforms a single point into a coordinate in an SVG file """
+    return ((point["lon"] - bounds["min_lon"]) * transform_coefficient,
+            ((bounds["max_lat"] - bounds["min_lat"]) - (point["lat"] - bounds["min_lat"])) * transform_coefficient)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Turns a gpx file into an art.')
