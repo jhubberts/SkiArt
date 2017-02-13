@@ -5,45 +5,62 @@ import os
 import random
 import colorsys
 
-def main(input, output):
-    input_map = get_input_map(input)
+def main(name, output):
+    name_to_files_map = get_name_to_files_map(name)
+    name_to_data_map = parse_name_to_files_map(name_to_files_map)
+    bounds = get_universal_bounds(name_to_data_map)
 
     dwg = svgwrite.Drawing(output.name, profile='tiny')
-
-    colors = get_n_colors(len(input_map))
+    colors = get_n_colors(len(name_to_files_map))
     color_idx = 0
 
-    parsed_input_map = parse_input_map(input_map)
-    bounds = get_universal_bounds(parsed_input_map)
-
-    for input in parsed_input_map:
-        coords = points_to_coordinates(parsed_input_map[input]["points"], bounds)
+    for name in name_to_data_map:
+        coords = points_to_coordinates(name_to_data_map[name]["points"], bounds)
         dwg.add(dwg.polyline(coords, stroke=colors[color_idx], stroke_width="3", stroke_opacity="0.6", fill="none"))
         color_idx += 1
 
     dwg.save()
 
-def get_input_map(input_dir):
-    input_map = {}
+def get_name_to_files_map(input_dir):
+    """
+    Gets a map of the name of a given skier to a list of files in a directory with that name. This assumes
+    that the input directory provided to this tool has the following format:
+    dir -
+    | - Person 1
+      | - Day_1.gpx
+      | - Day_2.gpx
+    | - Person 2
+      | - Day_1.gpx
+      | - Day_2.gpx
+
+    """
+
+    name_to_files_map = {}
 
     for dir in os.listdir(input_dir):
         dir_path = os.path.join(input_dir,dir)
-        input_map[dir] = map(lambda x: open(os.path.join(dir_path, x), 'r'), os.listdir(dir_path))
+        name_to_files_map[dir] = map(lambda x: open(os.path.join(dir_path, x), 'r'), os.listdir(dir_path))
 
-    return input_map
+    return name_to_files_map
 
-def parse_input_map(input_map):
-    parsed_input_map = {}
-    for input in input_map:
+def parse_name_to_files_map(name_to_files_map):
+    """
+    Reads and transforms GPS points for each individual in the name_to_files_map, and figures out the bounds of their
+    entire trip
+    """
+    name_to_data_map = {}
+    for input in name_to_files_map:
         points = []
-        for file in input_map[input]:
+        for file in name_to_files_map[input]:
             points.extend(get_points_from_file(file))
         bounds = get_bounds(points)
-        parsed_input_map[input] = {"points": points, "bounds": bounds}
-    return parsed_input_map
+        name_to_data_map[input] = {"points": points, "bounds": bounds}
+    return name_to_data_map
 
 def get_points_from_file(file):
-    """ Parses a GPX file, and returns an array of all GPS points described by that file """
+    """
+    Parses a GPX file, and returns an array of all GPS points described by that file
+    """
     parsed = BeautifulSoup(file.read(), 'html.parser')
     segments = parsed.trk.findAll("trkseg")
     points = []
@@ -55,8 +72,10 @@ def get_points_from_file(file):
     return points
 
 def transform_bs4_point(bs4_point):
-    """ Transforms a single BeautifulSoup node representing a node in the GPS coordinate graph
-    into a dictionary representing the elements we care about """
+    """
+    Transforms a single BeautifulSoup node representing a node in the GPS coordinate graph
+    into a dictionary representing the elements we care about
+    """
     return {
         "lat": float(bs4_point["lat"]), # Degrees
         "lon": float(bs4_point["lon"]), # Degrees
@@ -64,15 +83,17 @@ def transform_bs4_point(bs4_point):
         "time": bs4_point.time.string # ISO8601
     }
 
-def get_universal_bounds(parsed_input_map):
-    """ Gets the bounds of all recorded segments """
+def get_universal_bounds(name_to_data_map):
+    """
+    Gets the bounds of all recorded segments
+    """
     min_lat = float("inf")
     max_lat = float("-inf")
     min_lon = float("inf")
     max_lon = float("-inf")
 
-    for parsed_input in parsed_input_map:
-        item = parsed_input_map[parsed_input]
+    for name in name_to_data_map:
+        item = name_to_data_map[name]
 
         min_lat = item["bounds"]["min_lat"] if item["bounds"]["min_lat"] < min_lat else min_lat
         min_lon = item["bounds"]["min_lon"] if item["bounds"]["min_lon"] < min_lon else min_lon
@@ -87,7 +108,9 @@ def get_universal_bounds(parsed_input_map):
     }
 
 def get_bounds(points):
-    """ Returns the min and max lat and lon within an array of points """
+    """
+    Returns the min and max lat and lon within an array of points
+    """
     min_lat = float("inf")
     max_lat = float("-inf")
     min_lon = float("inf")
@@ -107,7 +130,9 @@ def get_bounds(points):
     }
 
 def points_to_coordinates(points, bounds, desired_width=1000):
-    """ Transforms GPS points into coordinates for the desired SVG file """
+    """
+    Transforms GPS points into coordinates for the desired SVG file
+    """
     height = bounds["max_lat"] - bounds["min_lat"]
     width = bounds["max_lon"] - bounds["min_lon"]
 
@@ -116,7 +141,9 @@ def points_to_coordinates(points, bounds, desired_width=1000):
     return map(lambda x: point_to_coordinate(x, bounds, transform_coefficient), points)
 
 def get_n_colors(n):
-    """ Returns N contrasting RGB fill descriptors """
+    """
+    Returns N contrasting RGB fill descriptors
+    """
     transform_constant = 1.0 / n
 
     rgb_colors = []
@@ -132,7 +159,9 @@ def get_n_colors(n):
 
 
 def point_to_coordinate(point, bounds, transform_coefficient):
-    """ Transforms a single point into a coordinate in an SVG file """
+    """
+    Transforms a single point into a coordinate in an SVG file
+    """
     return ((point["lon"] - bounds["min_lon"]) * transform_coefficient,
             ((bounds["max_lat"] - bounds["min_lat"]) - (point["lat"] - bounds["min_lat"])) * transform_coefficient)
 
