@@ -8,14 +8,26 @@ import colorsys
 def main(inputs, output):
     dwg = svgwrite.Drawing(output.name, profile='tiny')
 
-    points = []
-    for file in inputs:
-        points.extend(get_points_from_file(file))
+    colors = get_n_colors(len(inputs))
+    color_idx = 0
 
-    coords = points_to_coordinates(points)
+    parsed_inputs = parse_inputs(inputs)
+    bounds = get_universal_bounds(parsed_inputs)
 
-    dwg.add(dwg.polyline(coords, stroke="black", stroke_width="3", fill="white"))
+    for input in parsed_inputs:
+        coords = points_to_coordinates(input["points"], bounds)
+        dwg.add(dwg.polyline(coords, stroke=colors[color_idx], stroke_width="3", stroke_opacity="0.6", fill="none"))
+        color_idx += 1
+
     dwg.save()
+
+def parse_inputs(inputs):
+    parsed_inputs = []
+    for input in inputs:
+        points = get_points_from_file(input)
+        bounds = get_bounds(points)
+        parsed_inputs.append({"points": points, "bounds": bounds})
+    return parsed_inputs
 
 def get_points_from_file(file):
     """ Parses a GPX file, and returns an array of all GPS points described by that file """
@@ -39,6 +51,26 @@ def transform_bs4_point(bs4_point):
         "time": bs4_point.time.string # ISO8601
     }
 
+def get_universal_bounds(parsed_inputs):
+    """ Gets the bounds of all recorded segments """
+    min_lat = float("inf")
+    max_lat = float("-inf")
+    min_lon = float("inf")
+    max_lon = float("-inf")
+
+    for parsed_input in parsed_inputs:
+        min_lat = parsed_input["bounds"]["min_lat"] if parsed_input["bounds"]["min_lat"] < min_lat else min_lat
+        min_lon = parsed_input["bounds"]["min_lon"] if parsed_input["bounds"]["min_lon"] < min_lon else min_lon
+        max_lat = parsed_input["bounds"]["max_lat"] if parsed_input["bounds"]["max_lat"] > max_lat else max_lat
+        max_lon = parsed_input["bounds"]["max_lon"] if parsed_input["bounds"]["max_lon"] > max_lon else max_lon
+
+    return {
+        "min_lat": min_lat,
+        "min_lon": min_lon,
+        "max_lat": max_lat,
+        "max_lon": max_lon
+    }
+
 def get_bounds(points):
     """ Returns the min and max lat and lon within an array of points """
     min_lat = float("inf")
@@ -59,11 +91,8 @@ def get_bounds(points):
         "max_lon": max_lon
     }
 
-def points_to_coordinates(points, desired_width=1000):
+def points_to_coordinates(points, bounds, desired_width=1000):
     """ Transforms GPS points into coordinates for the desired SVG file """
-    bounds = get_bounds(points)
-    print bounds
-
     height = bounds["max_lat"] - bounds["min_lat"]
     width = bounds["max_lon"] - bounds["min_lon"]
 
