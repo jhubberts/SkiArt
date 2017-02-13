@@ -2,6 +2,9 @@ from bs4 import BeautifulSoup
 import argparse
 import svgwrite
 
+import random
+import colorsys
+
 def main(inputs, output):
     dwg = svgwrite.Drawing(output.name, profile='tiny')
 
@@ -10,6 +13,7 @@ def main(inputs, output):
         points.extend(get_points_from_file(file))
 
     coords = points_to_coordinates(points)
+
     dwg.add(dwg.polyline(coords, stroke="black", stroke_width="3", fill="white"))
     dwg.save()
 
@@ -58,6 +62,7 @@ def get_bounds(points):
 def points_to_coordinates(points, desired_width=1000):
     """ Transforms GPS points into coordinates for the desired SVG file """
     bounds = get_bounds(points)
+    print bounds
 
     height = bounds["max_lat"] - bounds["min_lat"]
     width = bounds["max_lon"] - bounds["min_lon"]
@@ -65,6 +70,22 @@ def points_to_coordinates(points, desired_width=1000):
     transform_coefficient = float(desired_width) / width # Make width 1000
 
     return map(lambda x: point_to_coordinate(x, bounds, transform_coefficient), points)
+
+def get_n_colors(n):
+    """ Returns N contrasting RGB fill descriptors """
+    transform_constant = 1.0 / n
+
+    rgb_colors = []
+
+    for i in range(0, n):
+        hue = i * transform_constant
+        lightness = 0.5 + 0.1 * random.random()
+        saturation = 0.9 + 0.1 * random.random()
+        rgb = map(lambda x: x * 256.0, colorsys.hls_to_rgb(hue, lightness, saturation))
+        rgb_colors.append(svgwrite.rgb(rgb[0], rgb[1], rgb[2], '%'))
+
+    return rgb_colors
+
 
 def point_to_coordinate(point, bounds, transform_coefficient):
     """ Transforms a single point into a coordinate in an SVG file """
