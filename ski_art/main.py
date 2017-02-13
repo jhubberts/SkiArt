@@ -1,33 +1,46 @@
 from bs4 import BeautifulSoup
 import argparse
 import svgwrite
-
+import os
 import random
 import colorsys
 
-def main(inputs, output):
+def main(input, output):
+    input_map = get_input_map(input)
+
     dwg = svgwrite.Drawing(output.name, profile='tiny')
 
-    colors = get_n_colors(len(inputs))
+    colors = get_n_colors(len(input_map))
     color_idx = 0
 
-    parsed_inputs = parse_inputs(inputs)
-    bounds = get_universal_bounds(parsed_inputs)
+    parsed_input_map = parse_input_map(input_map)
+    bounds = get_universal_bounds(parsed_input_map)
 
-    for input in parsed_inputs:
-        coords = points_to_coordinates(input["points"], bounds)
+    for input in parsed_input_map:
+        coords = points_to_coordinates(parsed_input_map[input]["points"], bounds)
         dwg.add(dwg.polyline(coords, stroke=colors[color_idx], stroke_width="3", stroke_opacity="0.6", fill="none"))
         color_idx += 1
 
     dwg.save()
 
-def parse_inputs(inputs):
-    parsed_inputs = []
-    for input in inputs:
-        points = get_points_from_file(input)
+def get_input_map(input_dir):
+    input_map = {}
+
+    for dir in os.listdir(input_dir):
+        dir_path = os.path.join(input_dir,dir)
+        input_map[dir] = map(lambda x: open(os.path.join(dir_path, x), 'r'), os.listdir(dir_path))
+
+    return input_map
+
+def parse_input_map(input_map):
+    parsed_input_map = {}
+    for input in input_map:
+        points = []
+        for file in input_map[input]:
+            points.extend(get_points_from_file(file))
         bounds = get_bounds(points)
-        parsed_inputs.append({"points": points, "bounds": bounds})
-    return parsed_inputs
+        parsed_input_map[input] = {"points": points, "bounds": bounds}
+    return parsed_input_map
 
 def get_points_from_file(file):
     """ Parses a GPX file, and returns an array of all GPS points described by that file """
@@ -51,18 +64,20 @@ def transform_bs4_point(bs4_point):
         "time": bs4_point.time.string # ISO8601
     }
 
-def get_universal_bounds(parsed_inputs):
+def get_universal_bounds(parsed_input_map):
     """ Gets the bounds of all recorded segments """
     min_lat = float("inf")
     max_lat = float("-inf")
     min_lon = float("inf")
     max_lon = float("-inf")
 
-    for parsed_input in parsed_inputs:
-        min_lat = parsed_input["bounds"]["min_lat"] if parsed_input["bounds"]["min_lat"] < min_lat else min_lat
-        min_lon = parsed_input["bounds"]["min_lon"] if parsed_input["bounds"]["min_lon"] < min_lon else min_lon
-        max_lat = parsed_input["bounds"]["max_lat"] if parsed_input["bounds"]["max_lat"] > max_lat else max_lat
-        max_lon = parsed_input["bounds"]["max_lon"] if parsed_input["bounds"]["max_lon"] > max_lon else max_lon
+    for parsed_input in parsed_input_map:
+        item = parsed_input_map[parsed_input]
+
+        min_lat = item["bounds"]["min_lat"] if item["bounds"]["min_lat"] < min_lat else min_lat
+        min_lon = item["bounds"]["min_lon"] if item["bounds"]["min_lon"] < min_lon else min_lon
+        max_lat = item["bounds"]["max_lat"] if item["bounds"]["max_lat"] > max_lat else max_lat
+        max_lon = item["bounds"]["max_lon"] if item["bounds"]["max_lon"] > max_lon else max_lon
 
     return {
         "min_lat": min_lat,
@@ -124,7 +139,7 @@ def point_to_coordinate(point, bounds, transform_coefficient):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Turns a gpx file into an art.')
     parser.add_argument("-o", "--output", type=argparse.FileType('w'), required=True, help="Directs the output to a name of your choice")
-    parser.add_argument('inputs', type=argparse.FileType('r'), nargs='+')
+    parser.add_argument("-i", "--input", required=True, help="Specifies the input directory")
 
     args = parser.parse_args()
-    main(args.inputs, args.output)
+    main(args.input, args.output)
